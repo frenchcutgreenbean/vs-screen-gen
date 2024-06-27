@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+# create .env file with line PTPIMG_API={api_key}
 ptpimg_api = os.getenv("PTPIMG_API")
 
 payload = {
