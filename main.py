@@ -8,7 +8,7 @@ from awsmfunc.types.placebo import (
 )
 
 
-def set_common_props(clip, source, crop=False, tonemap=False):
+def set_common_props(clip, source, crop=False, tonemap=False, info=True):
     """
     Set common properties
     :param clip: Clip to set properties on
@@ -47,12 +47,13 @@ def set_common_props(clip, source, crop=False, tonemap=False):
         clip = clip.std.Crop(left=0, right=0, top=crop, bottom=crop)
 
     # Set frame info
-    clip = FrameInfo(
-        clip,
-        ## These settings make the font a yellow with black border and a little bit bigger kinda like avs subs
-        style="sans-serif,35,&H0000FFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,10,10,10,1",
-        title=source,
-    )
+    if info:
+        clip = FrameInfo(
+            clip,
+            ## These settings make the font a yellow with black border and a little bit bigger kinda like avs subs
+            style="sans-serif,35,&H0000FFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,2,0,7,10,10,10,1",
+            title=source,
+        )
     return clip
 
 
@@ -101,12 +102,6 @@ def get_frames(clips: list, starting_frame=4000, screen_count=20, stop_before=80
     return frames
 
 
-def save_frames_to_file(frames, filename="screens.txt"):
-    with open(filename, "w") as file:
-        for frame in frames:
-            file.write(f"{frame}\n")
-
-
 ## File paths: Hold shift and right-click your file in the Windows File Explorer, select copy as path, and paste it here
 paths = [
     r"C:\path-to\clip1",
@@ -128,8 +123,10 @@ clips = [
 ]
 
 ## Apply settings to clips
-## Params: clip, source, crop: int size in pixels of black bars / 2, tonemap: bool
-clips[0] = set_common_props(clip=clips[0], source=sources[0], crop=42, tonemap=True)
+## Params: clip, source, crop: int size in pixels of black bars / 2, tonemap: bool, info: bool to include the FrameInfo in screens.
+clips[0] = set_common_props(
+    clip=clips[0], source=sources[0], crop=0, tonemap=True, info=False
+)
 clips[1] = set_common_props(clip=clips[1], source=sources[1], crop=False, tonemap=True)
 # clips[2] = set_common_props(clip = clips[2], source=sources[2], crop=False, tonemap=True)
 
@@ -138,8 +135,7 @@ clips[1] = set_common_props(clip=clips[1], source=sources[1], crop=False, tonema
 
 ## Get B frames to comp
 ## Params: clips: list, start frame: int frame after intros, screenshot count, stop before: int frame before credits
-frames = get_frames(clips, 4000, 10, 4000)
+frames = get_frames(clips, 4000, 15, 4000)
 
-save_frames_to_file(frames)
 
-ScreenGen(clips, "Screenshots", suffix=sources)
+ScreenGen(clips, "Screenshots", frame_numbers=frames, suffix=sources)
