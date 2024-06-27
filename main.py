@@ -140,9 +140,6 @@ clips[1] = set_common_props(clip=clips[1], source=sources[1], crop=False, tonema
 ## Params: clips: list, start frame: int frame after intros, screenshot count, stop before: int frame before credits
 frames = get_frames(clips, 4000, 10, 4000)
 
-for frame in frames:
-    get_frame_info(clips[0], frame)
-
 save_frames_to_file(frames)
 
 ScreenGen(clips, "Screenshots", suffix=sources)
