@@ -4,7 +4,7 @@
 // @match       https://slow.pics/c/*
 // @grant       GM.xmlHttpRequest
 // @grant       GM.setClipboard
-// @version     1.3
+// @version     1.4
 // @author      L4G
 // @description Get All Images from slow.pics, rehost to ptpimg and then output comparison bbcode
 // ==/UserScript==
@@ -110,9 +110,20 @@ So speed is reliant on your upload speed.
         method: "GET",
         url: imgUrl,
         responseType: "blob",
-        onload: function (response) {
+        onload: async function (response) {
           if (response.status === 200) {
-            resolve(response.response);
+            const blob = response.response;
+            if (blob.type === "image/webp") {
+              if (debug) console.log(`Converting WebP to PNG for ${imgUrl}`);
+              try {
+                const pngBlob = await convertWebPToPNG(blob);
+                resolve(pngBlob);
+              } catch (error) {
+                reject(error);
+              }
+            } else {
+              resolve(blob);
+            }
           } else {
             reject(`Error: ${response.status}`);
           }
@@ -121,6 +132,30 @@ So speed is reliant on your upload speed.
           reject(err);
         },
       });
+    });
+  }
+
+  function convertWebPToPNG(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const img = new Image();
+        img.onload = function () {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob(function (pngBlob) {
+            resolve(pngBlob);
+          }, "image/png");
+        };
+        img.src = event.target.result;
+      };
+      reader.onerror = function (err) {
+        reject(err);
+      };
+      reader.readAsDataURL(blob);
     });
   }
 
@@ -142,10 +177,11 @@ So speed is reliant on your upload speed.
         onload: function (response) {
           if (response.status === 200) {
             let res = JSON.parse(response.responseText);
-            if (debug){
+            if (debug) {
               console.log(
                 `Uploaded: ${`https://ptpimg.me/${res[0].code}.${res[0].ext}`}`
-              );}
+              );
+            }
             resolve(`https://ptpimg.me/${res[0].code}.${res[0].ext}`);
           } else {
             reject(`Error: ${response.status}`);
