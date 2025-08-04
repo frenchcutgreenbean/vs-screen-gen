@@ -4,7 +4,7 @@
 // @match       https://slow.pics/c/*
 // @grant       GM.xmlHttpRequest
 // @grant       GM.setClipboard
-// @version     1.4
+// @version     1.5
 // @author      L4G
 // @description Get All Images from slow.pics, rehost to ptpimg and then output comparison bbcode
 // ==/UserScript==
@@ -24,57 +24,127 @@ So speed is reliant on your upload speed.
 
   const convertButton = document.createElement("button");
   convertButton.textContent = "Convert Comparison";
-  convertButton.setAttribute("class", "btn btn-success mr-2");
+  convertButton.setAttribute("class", "btn btn-success me-2");
   convertButton.setAttribute("type", "button");
-  let nav_item = document.querySelectorAll(".nav-item");
-  nav_item[nav_item.length - 2].append(convertButton);
+  let nav_item = document.querySelector(".footer-position");
+  let existingDownloadBtn = nav_item.querySelector(".btn-download");
+  existingDownloadBtn.insertAdjacentElement("afterend", convertButton);
   convertButton.addEventListener("click", getButtonFunction);
 
   let comps = [];
-  document.querySelectorAll("[id^=dropdown-comparison-]").forEach((comp) => {
-    comps.push(comp.href);
-  });
+  let sources = [];
+  
+  // Use the collection data that's available on the page
+  if (typeof collection !== 'undefined' && collection.comparisons) {
+    // Get source names from the first comparison
+    if (collection.comparisons.length > 0) {
+      collection.comparisons[0].images.forEach((img) => {
+        sources.push(img.name);
+      });
+    }
+    
+    // Store comparison data directly
+    comps = collection.comparisons;
+  } else {
+    // Fallback: get from preview section
+    document.querySelectorAll("#preview a").forEach((comp) => {
+      comps.push(comp.href);
+    });
+    
+    let preview_images = document.querySelectorAll("#preview img");
+    preview_images.forEach((img) => {
+      sources.push(img.alt);
+    });
+  }
 
   let images = [];
   async function getButtonFunction() {
     if (convertButton.textContent == "Show Comparison") {
       showComparison();
-    } else {
+    } else if (convertButton.textContent == "Convert Comparison") {
       convertButton.textContent = "Converting...";
-      await generateComparison();
-      showComparison();
-    }
-  }
-
-  let sources = [];
-  let source_children = [...document.getElementById("preload-images").children];
-  source_children.forEach((img) => {
-    sources.push(img.alt);
-  });
-
-  async function generateComparison() {
-    for (const comp of comps) {
-      const compHTML = await fetchComparisonHTML(comp);
-      const compImages = [
-        ...compHTML.getElementById("preload-images").children,
-      ];
-      let beforeLength = images.length;
-      if (PTPIMG_API_KEY == "") {
-        compImages.forEach((img) => {
-          images.push(img.src);
-        });
-      } else {
-        const promises = compImages.map(async (img, index) => {
-          const rehosted = await processImage(img.src);
-          images[index + beforeLength] = rehosted;
-        });
-        await Promise.all(promises);
-        images.length = beforeLength + compImages.length;
+      convertButton.disabled = true;
+      try {
+        await generateComparison();
+        showComparison();
+      } catch (error) {
+        console.error('Error generating comparison:', error);
+        convertButton.textContent = "✗ Error occurred";
+        setTimeout(() => {
+          convertButton.textContent = "Convert Comparison";
+          convertButton.disabled = false;
+        }, 3000);
       }
     }
-    while (images.filter(Boolean).length !== comps.length * sources.length) {
-      await delay(1000);
+    // Ignore clicks while processing
+  }
+
+  async function generateComparison() {
+    const totalComparisons = comps.length;
+    
+    // Check if we have collection data available (much faster!)
+    if (typeof collection !== 'undefined' && collection.comparisons) {
+      const cdnBaseUrl = typeof cdnUrl !== 'undefined' ? cdnUrl : "https://i.slow.pics/";
+      
+      for (let i = 0; i < collection.comparisons.length; i++) {
+        const comparison = collection.comparisons[i];
+        const compTitle = comparison.name;
+        
+        // Update button text with progress
+        convertButton.textContent = `Processing ${i + 1}/${totalComparisons}: ${compTitle}`;
+        
+        let beforeLength = images.length;
+        
+        if (PTPIMG_API_KEY == "") {
+          // Just use direct CDN URLs (fastest)
+          comparison.images.forEach((img) => {
+            images.push(cdnBaseUrl + img.publicFileName);
+          });
+        } else {
+          // Upload to PTPIMG
+          const promises = comparison.images.map(async (img, index) => {
+            const imgUrl = cdnBaseUrl + img.publicFileName;
+            const rehosted = await processImage(imgUrl);
+            images[index + beforeLength] = rehosted;
+          });
+          await Promise.all(promises);
+          images.length = beforeLength + comparison.images.length;
+        }
+      }
+    } else {
+      // Fallback to old method
+      for (let i = 0; i < comps.length; i++) {
+        const comp = comps[i];
+        convertButton.textContent = `Processing ${i + 1}/${totalComparisons}...`;
+        
+        const compHTML = await fetchComparisonHTML(comp);
+        const compImages = [
+          ...compHTML.querySelectorAll("#preview img"),
+        ];
+        let beforeLength = images.length;
+        
+        if (PTPIMG_API_KEY == "") {
+          compImages.forEach((img) => {
+            images.push(img.src);
+          });
+        } else {
+          const promises = compImages.map(async (img, index) => {
+            const rehosted = await processImage(img.src);
+            images[index + beforeLength] = rehosted;
+          });
+          await Promise.all(promises);
+          images.length = beforeLength + compImages.length;
+        }
+      }
     }
+    
+    // Wait for all uploads to complete (only needed for PTPIMG uploads)
+    if (PTPIMG_API_KEY !== "") {
+      while (images.filter(Boolean).length !== comps.length * sources.length) {
+        await delay(1000);
+      }
+    }
+    
     if (debug) console.log(`Images: ${images}`);
     convertButton.textContent = "Show Comparison";
   }
@@ -215,6 +285,14 @@ So speed is reliant on your upload speed.
     console.log(comp_bbcode);
     if (confirm(`Press OK to copy to clipboard \n\n${comp_bbcode}`) == true) {
       GM.setClipboard(comp_bbcode);
+      convertButton.textContent = "✓ Copied!";
+      setTimeout(() => {
+        convertButton.textContent = "Show Comparison";
+        convertButton.disabled = false;
+      }, 2000);
+    } else {
+      convertButton.textContent = "Show Comparison";
+      convertButton.disabled = false;
     }
   }
 })();
