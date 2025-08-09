@@ -4,7 +4,7 @@
 // @match       https://slow.pics/c/*
 // @require     https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js
 // @grant       GM.xmlHttpRequest
-// @version     1.3
+// @version     1.4
 // @author      dantayy
 // @description Get All Images from slow.pics, convert to PNG zip and download.
 // ==/UserScript==
@@ -65,24 +65,21 @@
 
         for (let i = 0; i < collection.comparisons.length; i++) {
           const comparison = collection.comparisons[i];
-          const compTitle = comparison.name ? comparison.name.replace(/[^a-zA-Z0-9_.-]/g, "_") : (i + 1).toString();
 
           // Update button text with progress
-          downloadButton.textContent = `Processing ${i + 1}/${totalComparisons}: ${compTitle}`;
+          downloadButton.textContent = `Processing ${i + 1}/${totalComparisons}...`;
 
           const promises = comparison.images.map(async (img, index) => {
             const imgUrl = cdnBaseUrl + img.publicFileName;
-            const progressText = `Processing ${i + 1}/${totalComparisons}: ${compTitle}`;
+            const progressText = `Processing ${i + 1}/${totalComparisons}`;
             const pngBlob = await convertToBlob(imgUrl, progressText);
             
-            // CHANGE THIS LINE - use img.name instead of sources[index]
-            const cleanSource = img.name ? img.name.replace(/[^a-zA-Z0-9_.-]/g, "_") : `source_${index}`;
+            const letter = String.fromCharCode(97 + index); // 97 is 'a' in ASCII
             
             if (debug) console.log(pngBlob);
-            if (debug) console.log(`${compTitle}_${cleanSource}.png`);
+            if (debug) console.log(`${i + 1}${letter}.png`);
 
-            // Add to ZIP with compression level 1 (fastest)
-            zip.file(`${i + 1}_${cleanTitle}_${cleanSource}.png`, pngBlob, {
+            zip.file(`${i + 1}${letter}.png`, pngBlob, {
               compression: "STORE",
             });
           });
